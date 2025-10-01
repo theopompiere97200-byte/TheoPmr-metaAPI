@@ -22,9 +22,10 @@ async def account_info():
         return {"error": "Pas de numéro de compte défini"}
     try:
         account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
+        state = await account.get_state()  # <-- récupération de l'état actuel du compte
         return {
-            "balance": account.balance,
-            "equity": account.equity,
+            "balance": state['balance'],
+            "equity": state['equity'],
             "account_id": ACCOUNT_ID
         }
     except Exception as e:
