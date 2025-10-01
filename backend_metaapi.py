@@ -27,29 +27,23 @@ client = MetaApi(API_TOKEN)
 async def root():
     return {"message": "Backend MetaApi OK"}
 
-# 🔹 Endpoint pour lister tous les comptes MT5
-@app.get("/accounts")
-async def get_accounts():
-    try:
-        accounts = await client.metatrader_account_api.get_accounts()
-        return [{"login": a.login, "type": a.type, "server": a.server} for a in accounts]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 # 🔹 Endpoint exact pour Base44
 @app.get("/account-info")
 async def account_info():
     try:
-        accounts = await client.metatrader_account_api.get_accounts()
+        # Récupérer la liste des comptes associés à la clé MetaApi
+        accounts_list = await client.metatrader_account_api.get_accounts_list()
         info = []
-        for a in accounts:
+        for summary in accounts_list:
+            # Récupérer les infos détaillées de chaque compte
+            account = await client.metatrader_account_api.get_account(summary.id)
             info.append({
-                "login": a.login,
-                "type": a.type,
-                "server": a.server,
-                "balance": getattr(a, "balance", None),
-                "equity": getattr(a, "equity", None),
-                "status": "connected" if getattr(a, "connection_status", "disconnected") == "connected" else "disconnected"
+                "login": account.login,
+                "type": account.type,
+                "server": account.server,
+                "balance": getattr(account, "balance", None),
+                "equity": getattr(account, "equity", None),
+                "status": "connected" if getattr(account, "connection_status", "disconnected") == "connected" else "disconnected"
             })
         return info
     except Exception as e:
