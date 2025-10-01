@@ -6,7 +6,7 @@ from metaapi_cloud_sdk import MetaApi
 
 app = FastAPI(title="MetaApi Bridge pour MindTrader")
 
-# CONFIGURATION CORS
+# CORS pour autoriser toutes les requêtes depuis Base44
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,64 +30,17 @@ async def get_account_info():
         if not accounts:
             raise HTTPException(status_code=404, detail="Aucun compte MetaTrader trouvé")
         
-        account = accounts[0]  # prend le premier compte disponible
-        connection = account.get_rpc_connection()
-        
-        await connection.connect()
-        await connection.wait_synchronized()
-        account_info = await connection.get_account_information()
-        
-        return {
-            "success": True,
-            "account_login": getattr(account, 'login', 'N/A'),
-            "broker": account_info.get("broker", "Unknown"),
-            "currency": account_info.get("currency", "USD"),
-            "server": account_info.get("server", "Unknown"),
-            "balance": account_info.get("balance", 0),
-            "equity": account_info.get("equity", 0),
-            "margin": account_info.get("margin", 0),
-            "freeMargin": account_info.get("freeMargin", 0),
-            "leverage": account_info.get("leverage", 0),
-            "profit": account_info.get("profit", 0)
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur MetaApi: {str(e)}")
-
-@app.get("/positions")
-async def get_positions():
-    try:
-        accounts = await client.metatrader_account_api.get_accounts()
-        if not accounts:
-            return {"success": False, "positions": [], "message": "Aucun compte trouvé"}
-        
         account = accounts[0]
         connection = account.get_rpc_connection()
         await connection.connect()
         await connection.wait_synchronized()
-        positions = await connection.get_positions()
+        info = await connection.get_account_information()
         
         return {
             "success": True,
             "account_login": getattr(account, 'login', 'N/A'),
-            "total_positions": len(positions),
-            "positions": [
-                {
-                    "id": pos.get("id"),
-                    "symbol": pos.get("symbol"),
-                    "type": pos.get("type"),
-                    "volume": pos.get("volume"),
-                    "openPrice": pos.get("openPrice"),
-                    "currentPrice": pos.get("currentPrice"),
-                    "profit": pos.get("profit"),
-                    "swap": pos.get("swap"),
-                    "commission": pos.get("commission"),
-                    "stopLoss": pos.get("stopLoss"),
-                    "takeProfit": pos.get("takeProfit"),
-                    "openTime": pos.get("time")
-                } for pos in positions
-            ]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+            "broker": info.get("broker", "Unknown"),
+            "currency": info.get("currency", "USD"),
+            "server": info.get("server", "Unknown"),
+            "balance": info.get("balance", 0),
+            "equity": info.get("e
