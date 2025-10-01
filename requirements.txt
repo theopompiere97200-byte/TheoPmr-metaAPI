@@ -1,3 +1,4 @@
-fastapi
-uvicorn
-metaapi-cloud-sdk
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+metaapi-cloud-sdk==27.0.2
+python-dateutil==2.8.2
