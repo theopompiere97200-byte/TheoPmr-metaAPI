@@ -1,29 +1,27 @@
 import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from metaapi_cloud_sdk import MetaApi
+from fastapi.middleware.cors import CORSMiddleware
 
-# --- Vérification des variables d'environnement ---
+app = FastAPI()
+
+# ✅ Vérifier les variables d'environnement
 API_TOKEN = os.getenv("METAAPI_KEY")
 ACCOUNT_ID = os.getenv("ACCOUNT_ID")
 
 if not API_TOKEN or not ACCOUNT_ID:
     raise Exception("⚠️ METAAPI_KEY ou ACCOUNT_ID non définis ! Vérifie tes variables Render")
 
-# --- Création du client MetaApi ---
-client = MetaApi(API_TOKEN)
-
-# --- Création de l'application FastAPI ---
-app = FastAPI(title="MetaApi Backend")
-
-# --- Activation CORS pour tous les domaines ---
+# CORS (optionnel si tu appelles depuis ton front)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ou ["https://ton-saas.com"] pour plus de sécurité
-    allow_credentials=True,
+    allow_origins=["*"],  # ou ton front exact
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialisation du client MetaApi
+client = MetaApi(API_TOKEN)
 
 @app.get("/")
 async def root():
@@ -32,9 +30,10 @@ async def root():
 @app.get("/account-info")
 async def account_info():
     try:
-        # Récupération de l'état historique (balance, equity) pour MT5 G2
+        # Obtenir l'état actuel du compte
         account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
-        state = await account.get_historical_state()  # méthode correcte
+        state = await account.get_state()  # méthode correcte pour obtenir balance/equity
+
         return {
             "balance": state.balance,
             "equity": state.equity,
