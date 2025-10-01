@@ -1,25 +1,16 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import os
-import asyncio
+from fastapi import FastAPI
 from metaapi_cloud_sdk import MetaApi
 
 app = FastAPI()
 
-# Autoriser Base44 ou n'importe quel front
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # tu peux mettre l'URL de ton front si tu veux plus de sécurité
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+API_TOKEN = os.getenv("METAAPI_KEY")
+ACCOUNT_ID = os.getenv("ACCOUNT_ID")
 
-# Récupérer le token et l'UUID depuis les variables d'environnement
-METAAPI_KEY = os.getenv("METAAPI_KEY")  # ton User Token MetaApi
-ACCOUNT_ID = os.getenv("ACCOUNT_ID")    # l'UUID du compte MT5
+if not API_TOKEN or not ACCOUNT_ID:
+    print("⚠️ METAAPI_KEY ou ACCOUNT_ID non définis ! Vérifie tes variables Render")
 
-# Créer le client MetaApi
-client = MetaApi(METAAPI_KEY)
+client = MetaApi(API_TOKEN)
 
 @app.get("/")
 async def root():
@@ -27,18 +18,11 @@ async def root():
 
 @app.get("/account-info")
 async def account_info():
-    try:
-        account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
-        # Refresh pour s'assurer que l'info est à jour
-        await account.wait_connected()
-        balance = await account.get_balance()
-        equity = await account.get_equity()
-        return {
-            "balance": balance,
-            "equity": equity,
-            "account_id": ACCOUNT_ID
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-# Pour lancer en local : uvicorn main:app --reload
+    if not ACCOUNT_ID:
+        return {"error": "Pas de numéro de compte défini"}
+    account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
+    return {
+        "balance": account.balance,
+        "equity": account.equity,
+        "account_id": ACCOUNT_ID
+    }
