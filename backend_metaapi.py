@@ -3,21 +3,26 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from metaapi_cloud_sdk import MetaApi
 
+# ✅ Initialisation FastAPI
 app = FastAPI(title="MetaApi Bridge pour MindTrader")
 
-# ✅ CONFIGURATION CORS (OBLIGATOIRE pour Base44)
+# ✅ CORS obligatoire pour Base44
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # toutes les origines autorisées
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 🔑 Votre clé API MetaApi (mettre dans les variables Render)
-API_TOKEN = os.getenv("METAAPI_KEY", "52c3348b-3e48-473e-88fd-d37734190a3b")
+# ✅ Clé API MetaApi (⚠️ à mettre dans Render → Environment Variables)
+API_TOKEN = os.getenv("METAAPI_KEY")
+if not API_TOKEN:
+    raise Exception("⚠️ Variable d'environnement METAAPI_KEY manquante !")
+
 client = MetaApi(API_TOKEN)
 
+# 🔹 Root
 @app.get("/")
 async def root():
     return {
@@ -25,19 +30,23 @@ async def root():
         "service": "MetaApi Bridge pour MindTrader"
     }
 
+# 🔹 Healthcheck pour Render
+@app.get("/healthz")
+async def healthz():
+    return {"status": "healthy 🟢"}
+
+# 🔹 Infos du compte MT5
 @app.get("/account-info")
 async def get_account_info():
     try:
-        # 🔹 Utiliser la bonne méthode du SDK
         accounts = await client.metatrader_account_api.get_accounts_list()
         
         if not accounts:
             raise HTTPException(status_code=404, detail="Aucun compte trouvé")
         
         deployed_accounts = [a for a in accounts if a.state == 'DEPLOYED']
-        
         if not deployed_accounts:
-            raise HTTPException(status_code=503, detail="Compte non déployé")
+            raise HTTPException(status_code=503, detail="Aucun compte déployé")
         
         account = deployed_accounts[0]
         connection = account.get_rpc_connection()
@@ -63,6 +72,7 @@ async def get_account_info():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 🔹 Positions ouvertes
 @app.get("/positions")
 async def get_positions():
     try:
@@ -72,7 +82,6 @@ async def get_positions():
             return {"positions": []}
         
         deployed_accounts = [a for a in accounts if a.state == 'DEPLOYED']
-        
         if not deployed_accounts:
             return {"positions": []}
         
@@ -105,6 +114,7 @@ async def get_positions():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ✅ Lancement (Render utilise cette commande automatiquement)
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
