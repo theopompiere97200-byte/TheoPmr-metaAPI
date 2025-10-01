@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -9,13 +8,13 @@ app = FastAPI(title="MetaApi Bridge pour MindTrader")
 # ✅ CONFIGURATION CORS (OBLIGATOIRE pour Base44)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # toutes les origines autorisées
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 🔑 Votre clé API MetaApi
+# 🔑 Votre clé API MetaApi (mettre dans les variables Render)
 API_TOKEN = os.getenv("METAAPI_KEY", "52c3348b-3e48-473e-88fd-d37734190a3b")
 client = MetaApi(API_TOKEN)
 
@@ -29,7 +28,8 @@ async def root():
 @app.get("/account-info")
 async def get_account_info():
     try:
-        accounts = await client.metatrader_account_api.get_accounts()
+        # 🔹 Utiliser la bonne méthode du SDK
+        accounts = await client.metatrader_account_api.get_accounts_list()
         
         if not accounts:
             raise HTTPException(status_code=404, detail="Aucun compte trouvé")
@@ -66,7 +66,7 @@ async def get_account_info():
 @app.get("/positions")
 async def get_positions():
     try:
-        accounts = await client.metatrader_account_api.get_accounts()
+        accounts = await client.metatrader_account_api.get_accounts_list()
         
         if not accounts:
             return {"positions": []}
