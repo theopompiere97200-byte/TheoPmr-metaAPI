@@ -1,98 +1,85 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from metaapi_cloud_sdk import MetaApi
 
-# ✅ Initialisation FastAPI
-app = FastAPI(title="MetaApi Bridge pour MindTrader")
+app = FastAPI(title="MetaApi Bridge pour Base44")
 
-# ✅ CORS obligatoire pour Base44
+# Activer CORS pour toutes les requêtes (obligatoire pour Base44)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Clé API MetaApi (⚠️ à mettre dans Render → Environment Variables)
+# Clé API MetaApi depuis Render (variable d'environnement)
 API_TOKEN = os.getenv("METAAPI_KEY")
-if not API_TOKEN:
-    raise Exception("⚠️ Variable d'environnement METAAPI_KEY manquante !")
-
 client = MetaApi(API_TOKEN)
 
-# 🔹 Root
+# UUID de ton compte MetaApi
+ACCOUNT_ID = "52c3348b-3e48-473e-88fd-d37734190a3b"
+
+
 @app.get("/")
 async def root():
-    return {
-        "status": "online ✅",
-        "service": "MetaApi Bridge pour MindTrader"
-    }
+    return {"status": "online ✅", "service": "MetaApi Bridge pour Base44"}
 
-# 🔹 Healthcheck pour Render
-@app.get("/healthz")
-async def healthz():
-    return {"status": "healthy 🟢"}
 
-# 🔹 Infos du compte MT5
-@app.get("/account-info")
-async def get_account_info():
+@app.get("/accounts")
+async def get_accounts():
+    """Liste tous les comptes MetaApi liés à ton token"""
     try:
-        accounts = await client.metatrader_account_api.get_accounts_list()
-        
-        if not accounts:
-            raise HTTPException(status_code=404, detail="Aucun compte trouvé")
-        
-        deployed_accounts = [a for a in accounts if a.state == 'DEPLOYED']
-        if not deployed_accounts:
-            raise HTTPException(status_code=503, detail="Aucun compte déployé")
-        
-        account = deployed_accounts[0]
+        accounts = await client.metatrader_account_api.get_metatrader_accounts()
+        return [
+            {
+                "id": a.id,
+                "login": a.login,
+                "type": a.type,
+                "server": a.server,
+                "state": a.state
+            }
+            for a in accounts
+        ]
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/account-info")
+async def account_info():
+    """Infos détaillées du compte principal"""
+    try:
+        account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
         connection = account.get_rpc_connection()
-        
         await connection.connect()
         await connection.wait_synchronized()
-        
-        account_info = await connection.get_account_information()
-        
+        info = await connection.get_account_information()
         return {
             "success": True,
-            "account_login": account.login,
-            "broker": account_info.get("broker", "Unknown"),
-            "currency": account_info.get("currency", "USD"),
-            "server": account_info.get("server", "Unknown"),
-            "balance": account_info.get("balance", 0),
-            "equity": account_info.get("equity", 0),
-            "margin": account_info.get("margin", 0),
-            "freeMargin": account_info.get("freeMargin", 0),
-            "leverage": account_info.get("leverage", 0),
-            "profit": account_info.get("profit", 0)
+            "login": account.login,
+            "server": account.server,
+            "balance": info.get("balance", 0),
+            "equity": info.get("equity", 0),
+            "margin": info.get("margin", 0),
+            "freeMargin": info.get("freeMargin", 0),
+            "leverage": info.get("leverage", 0),
+            "profit": info.get("profit", 0),
+            "currency": info.get("currency", "USD"),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
-# 🔹 Positions ouvertes
+
 @app.get("/positions")
 async def get_positions():
+    """Liste toutes les positions ouvertes du compte principal"""
     try:
-        accounts = await client.metatrader_account_api.get_accounts_list()
-        
-        if not accounts:
-            return {"positions": []}
-        
-        deployed_accounts = [a for a in accounts if a.state == 'DEPLOYED']
-        if not deployed_accounts:
-            return {"positions": []}
-        
-        account = deployed_accounts[0]
+        account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
         connection = account.get_rpc_connection()
-        
         await connection.connect()
         await connection.wait_synchronized()
-        
         positions = await connection.get_positions()
-        
         return {
             "success": True,
             "positions": [
@@ -112,10 +99,14 @@ async def get_positions():
             ]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
-# ✅ Lancement (Render utilise cette commande automatiquement)
+
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        "backend_metaapi:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000)),
+        reload=True
+    )
