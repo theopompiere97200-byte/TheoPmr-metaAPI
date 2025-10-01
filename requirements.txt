@@ -1,4 +1,57 @@
-fastapi==0.104.1
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Copy, CheckCircle } from "lucide-react";
+
+export default function RequirementsTxt() {
+  const [copied, setCopied] = useState(false);
+
+  const requirementsTxtCode = `fastapi==0.104.1
 uvicorn[standard]==0.24.0
-metaapi-cloud-sdk==27.0.2
-python-dateutil==2.8.2
+metaapi-cloud-sdk==27.0.1`;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(requirementsTxtCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">1</div>
+          Fichier requirements.txt
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <Label className="font-semibold">📄 requirements.txt</Label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyToClipboard}
+          >
+            {copied ? (
+              <><CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Copié !</>
+            ) : (
+              <><Copy className="w-4 h-4 mr-2" /> Copier</>
+            )}
+          </Button>
+        </div>
+        <pre className="bg-slate-900 text-green-400 p-4 rounded-lg text-sm">
+          {requirementsTxtCode}
+        </pre>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">
+            <strong>📝 Instructions :</strong><br />
+            1. Créez un fichier nommé exactement <code className="bg-blue-100 px-1 rounded">requirements.txt</code><br />
+            2. Copiez le contenu ci-dessus<br />
+            3. Sauvegardez le fichier
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
