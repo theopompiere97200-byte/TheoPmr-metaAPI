@@ -5,28 +5,28 @@ from metaapi_cloud_sdk import MetaApi
 
 app = FastAPI()
 
-# ⚠️ Vérification des variables d'environnement
+# CORS pour Base44
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tu peux remplacer "*" par ton domaine Base44 si tu veux
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Récupération des variables d'environnement
 API_TOKEN = os.getenv("METAAPI_KEY")
 ACCOUNT_ID = os.getenv("ACCOUNT_ID")
 
 if not API_TOKEN or not ACCOUNT_ID:
     print("⚠️ METAAPI_KEY ou ACCOUNT_ID non définis ! Vérifie tes variables Render")
 
-# Création du client MetaApi
+# Initialisation MetaApi
 client = MetaApi(API_TOKEN)
-
-# ⚡ Correction CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Autorise toutes les origines (Base44 inclus)
-    allow_credentials=False,  # False pour éviter conflit
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 async def root():
-    return {"status": "online"}
+    return {"status": "ok"}
 
 @app.get("/account-info")
 async def account_info():
@@ -34,10 +34,12 @@ async def account_info():
         return {"error": "Pas de numéro de compte défini"}
     try:
         account = await client.metatrader_account_api.get_account(ACCOUNT_ID)
-        state = await account.get_state_async()  # Utilise la méthode actuelle du SDK
+        # Utilisation de getattr pour éviter les erreurs si certaines propriétés n'existent pas
         return {
-            "balance": state['balance'],
-            "equity": state['equity'],
+            "balance": getattr(account, "balance", None),
+            "equity": getattr(account, "equity", None),
+            "margin": getattr(account, "margin", None),
+            "margin_free": getattr(account, "marginFree", None),
             "account_id": ACCOUNT_ID
         }
     except Exception as e:
