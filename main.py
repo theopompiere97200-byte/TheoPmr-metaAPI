@@ -29,7 +29,7 @@ async def root():
 async def get_account_info():
     try:
         print("Recuperation des comptes MetaApi...")
-        accounts = await client.metatrader_account_api.get_accounts()
+        accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
             raise HTTPException(
@@ -93,7 +93,7 @@ async def get_account_info():
 async def get_positions():
     try:
         print("Recuperation des comptes...")
-        accounts = await client.metatrader_account_api.get_accounts()
+        accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
             return {
