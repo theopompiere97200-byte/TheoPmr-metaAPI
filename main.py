@@ -1,23 +1,18 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from metaapi_cloud_sdk import MetaApi
+from backend_metaapi import get_account_info, get_open_positions
 
-import os
-import asyncio
+app = FastAPI(title="MetaApi Backend")
 
-app = FastAPI()
-
-# CORS config
+# Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ouvre à tout le monde
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-API_KEY = os.getenv("METAAPI_TOKEN", "")
-metaapi = MetaApi(API_KEY)
 
 
 @app.get("/")
@@ -28,29 +23,14 @@ async def root():
 @app.get("/account-info")
 async def account_info():
     try:
-        accounts = await metaapi.metatrader_account_api.get_accounts()
-        if not accounts:
-            return {"error": "Aucun compte MetaApi trouvé"}
+        return await get_account_info()
+    except Exception as e:
+        return {"error": str(e)}
 
-        account = accounts[0]
 
-        # Connexion au compte
-        connection = account.get_rpc_connection()
-        await connection.connect()
-
-        # Attente de la connexion
-        await connection.wait_synchronized()
-
-        # Récupération des infos
-        info = await connection.get_account_information()
-
-        return {
-            "login": info.get("login"),
-            "currency": info.get("currency"),
-            "server": info.get("server"),
-            "balance": info.get("balance"),
-            "equity": info.get("equity"),
-        }
-
+@app.get("/positions")
+async def positions():
+    try:
+        return {"positions": await get_open_positions()}
     except Exception as e:
         return {"error": str(e)}
