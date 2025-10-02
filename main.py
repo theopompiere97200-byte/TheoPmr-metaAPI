@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import asyncio
 from metaapi_cloud_sdk import MetaApi
+from datetime import datetime, timedelta
 
 app = FastAPI(title="MetaApi Bridge pour MindTrader")
 
@@ -34,35 +35,30 @@ async def get_account_info():
         if not accounts or len(accounts) == 0:
             raise HTTPException(
                 status_code=404, 
-                detail="Aucun compte MetaTrader trouve sur votre compte MetaApi"
+                detail="Aucun compte MetaTrader trouve"
             )
         
-        print(f"{len(accounts)} compte(s) trouve(s)")
         account = accounts[0]
         
         if account.state != "DEPLOYED":
             raise HTTPException(
                 status_code=400,
-                detail=f"Le compte n'est pas deploye. Statut actuel: {account.state}"
+                detail=f"Compte non deploye. Statut: {account.state}"
             )
         
         print(f"Connexion au compte {account.login}...")
         connection = account.get_rpc_connection()
         
         await connection.connect()
-        print("Attente de la synchronisation...")
+        print("Attente synchronisation...")
         
         try:
-            await asyncio.wait_for(connection.wait_synchronized(), timeout=30.0)
-            print("Synchronisation complete !")
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
+            print("Synchronisation OK")
         except asyncio.TimeoutError:
-            print("Timeout synchronisation, tentative de recuperation quand meme...")
+            print("Timeout sync - recuperation partielle")
         
-        print("Recuperation des donnees du compte...")
         account_info = await connection.get_account_information()
-        
-        print(f"Balance: {account_info.get('balance', 'N/A')}")
-        print(f"Equity: {account_info.get('equity', 'N/A')}")
         
         return {
             "success": True,
@@ -84,38 +80,30 @@ async def get_account_info():
         raise
     except Exception as e:
         print(f"Erreur: {str(e)}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Erreur MetaApi: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erreur MetaApi: {str(e)}")
 
 @app.get("/positions")
 async def get_positions():
     try:
-        print("Recuperation des comptes...")
+        print("Recuperation positions...")
         accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
-            return {
-                "success": False, 
-                "positions": [], 
-                "message": "Aucun compte trouve"
-            }
+            return {"success": False, "positions": [], "message": "Aucun compte"}
         
         account = accounts[0]
-        print(f"Connexion au compte {account.login}...")
         connection = account.get_rpc_connection()
         
         await connection.connect()
         
         try:
-            await asyncio.wait_for(connection.wait_synchronized(), timeout=30.0)
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
+            print("Sync positions OK")
         except asyncio.TimeoutError:
-            print("Timeout synchronisation positions")
+            print("Timeout sync positions")
         
-        print("Recuperation des positions...")
         positions = await connection.get_positions()
-        print(f"{len(positions)} position(s) trouvee(s)")
+        print(f"{len(positions)} position(s) ouverte(s)")
         
         return {
             "success": True,
@@ -142,7 +130,54 @@ async def get_positions():
         
     except Exception as e:
         print(f"Erreur positions: {str(e)}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Erreur positions: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erreur positions: {str(e)}")
+
+@app.get("/history")
+async def get_history():
+    try:
+        print("Recuperation historique...")
+        accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
+        
+        if not accounts or len(accounts) == 0:
+            return {"success": False, "deals": [], "message": "Aucun compte"}
+        
+        account = accounts[0]
+        connection = account.get_rpc_connection()
+        
+        await connection.connect()
+        
+        try:
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
+        except asyncio.TimeoutError:
+            print("Timeout sync history")
+        
+        # Récupérer l'historique des 30 derniers jours
+        start_time = datetime.now() - timedelta(days=30)
+        deals = await connection.get_deals_by_time_range(start_time, datetime.now())
+        
+        print(f"{len(deals)} deal(s) dans l'historique")
+        
+        return {
+            "success": True,
+            "account_login": str(account.login),
+            "total_deals": len(deals),
+            "deals": [
+                {
+                    "id": deal.get("id"),
+                    "type": deal.get("type"),
+                    "symbol": deal.get("symbol"),
+                    "volume": deal.get("volume"),
+                    "price": deal.get("price"),
+                    "profit": deal.get("profit"),
+                    "commission": deal.get("commission"),
+                    "swap": deal.get("swap"),
+                    "time": deal.get("time"),
+                    "entryType": deal.get("entryType")
+                }
+                for deal in deals
+            ]
+        }
+        
+    except Exception as e:
+        print(f"Erreur historique: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur historique: {str(e)}")
