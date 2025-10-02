@@ -1,46 +1,56 @@
-# main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
 from metaapi_cloud_sdk import MetaApi
 
-app = FastAPI(title="MetaApi Bridge pour MindTrader")
+import os
+import asyncio
 
-# CORS pour autoriser toutes les requêtes depuis Base44
+app = FastAPI()
+
+# CORS config
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # ouvre à tout le monde
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Clé API MetaApi
-API_TOKEN = os.getenv("METAAPI_KEY", "52c3348b-3e48-473e-88fd-d37734190a3b")
-client = MetaApi(API_TOKEN)
+API_KEY = os.getenv("METAAPI_TOKEN", "")
+metaapi = MetaApi(API_KEY)
+
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "MetaApi Bridge pour MindTrader", "version": "1.0.0"}
+    return {"message": "MetaApi backend is running 🚀"}
+
 
 @app.get("/account-info")
-async def get_account_info():
+async def account_info():
     try:
-        accounts = await client.metatrader_account_api.get_accounts()
+        accounts = await metaapi.metatrader_account_api.get_accounts()
         if not accounts:
-            raise HTTPException(status_code=404, detail="Aucun compte MetaTrader trouvé")
-        
+            return {"error": "Aucun compte MetaApi trouvé"}
+
         account = accounts[0]
+
+        # Connexion au compte
         connection = account.get_rpc_connection()
         await connection.connect()
+
+        # Attente de la connexion
         await connection.wait_synchronized()
+
+        # Récupération des infos
         info = await connection.get_account_information()
-        
+
         return {
-            "success": True,
-            "account_login": getattr(account, 'login', 'N/A'),
-            "broker": info.get("broker", "Unknown"),
-            "currency": info.get("currency", "USD"),
-            "server": info.get("server", "Unknown"),
-            "balance": info.get("balance", 0),
-            "equity": info.get("e
+            "login": info.get("login"),
+            "currency": info.get("currency"),
+            "server": info.get("server"),
+            "balance": info.get("balance"),
+            "equity": info.get("equity"),
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
