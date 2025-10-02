@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_TOKEN = os.getenv("METAAPI_KEY", "52c3348b-3e48-473e-88fd-d37734190a3b")
+API_TOKEN = os.getenv("METAAPI_KEY", "votre-cle-metaapi")
 client = MetaApi(API_TOKEN)
 
 @app.get("/")
@@ -29,7 +29,7 @@ async def root():
 @app.get("/account-info")
 async def get_account_info():
     try:
-        print("Recuperation des comptes MetaApi...")
+        print("📊 Recuperation des comptes MetaApi...")
         accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
@@ -39,6 +39,7 @@ async def get_account_info():
             )
         
         account = accounts[0]
+        print(f"✅ Compte trouve: {account.login}")
         
         if account.state != "DEPLOYED":
             raise HTTPException(
@@ -46,17 +47,17 @@ async def get_account_info():
                 detail=f"Compte non deploye. Statut: {account.state}"
             )
         
-        print(f"Connexion au compte {account.login}...")
+        print(f"🔌 Connexion au compte {account.login}...")
         connection = account.get_rpc_connection()
         
         await connection.connect()
-        print("Attente synchronisation...")
+        print("⏳ Attente synchronisation...")
         
         try:
-            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
-            print("Synchronisation OK")
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=60.0)
+            print("✅ Synchronisation complete!")
         except asyncio.TimeoutError:
-            print("Timeout sync - recuperation partielle")
+            print("⚠️ Timeout sync - recuperation partielle")
         
         account_info = await connection.get_account_information()
         
@@ -79,13 +80,13 @@ async def get_account_info():
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Erreur: {str(e)}")
+        print(f"❌ Erreur: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur MetaApi: {str(e)}")
 
 @app.get("/positions")
 async def get_positions():
     try:
-        print("Recuperation positions...")
+        print("📍 Recuperation des positions ouvertes...")
         accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
@@ -97,13 +98,13 @@ async def get_positions():
         await connection.connect()
         
         try:
-            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
-            print("Sync positions OK")
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=60.0)
+            print("✅ Sync positions OK")
         except asyncio.TimeoutError:
-            print("Timeout sync positions")
+            print("⚠️ Timeout sync positions")
         
         positions = await connection.get_positions()
-        print(f"{len(positions)} position(s) ouverte(s)")
+        print(f"✅ {len(positions)} position(s) trouvee(s)")
         
         return {
             "success": True,
@@ -129,42 +130,64 @@ async def get_positions():
         }
         
     except Exception as e:
-        print(f"Erreur positions: {str(e)}")
+        print(f"❌ Erreur positions: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur positions: {str(e)}")
 
 @app.get("/history")
 async def get_history():
     try:
-        print("Recuperation historique...")
+        print("📜 Recuperation de l'historique des trades...")
         accounts = await client.metatrader_account_api.get_accounts_with_infinite_scroll_pagination()
         
         if not accounts or len(accounts) == 0:
             return {"success": False, "deals": [], "message": "Aucun compte"}
         
         account = accounts[0]
+        print(f"🔌 Connexion au compte {account.login}...")
         connection = account.get_rpc_connection()
         
         await connection.connect()
         
         try:
-            await asyncio.wait_for(connection.wait_synchronized(), timeout=45.0)
+            await asyncio.wait_for(connection.wait_synchronized(), timeout=60.0)
+            print("✅ Sync historique OK")
         except asyncio.TimeoutError:
-            print("Timeout sync history")
+            print("⚠️ Timeout sync historique")
         
-        # Récupérer l'historique des 30 derniers jours
-        start_time = datetime.now() - timedelta(days=30)
+        # Récupérer l'historique des 90 derniers jours
+        start_time = datetime.now() - timedelta(days=90)
+        print(f"📅 Recuperation depuis le {start_time.strftime('%Y-%m-%d')}")
+        
         deals = await connection.get_deals_by_time_range(start_time, datetime.now())
         
-        print(f"{len(deals)} deal(s) dans l'historique")
+        # Filtrer uniquement les trades fermés (DEAL_ENTRY_OUT)
+        closed_trades = [
+            deal for deal in deals 
+            if deal.get("entryType") == "DEAL_ENTRY_OUT" and 
+               deal.get("type") in ["DEAL_TYPE_BUY", "DEAL_TYPE_SELL"]
+        ]
+        
+        print(f"✅ {len(closed_trades)} trade(s) ferme(s) trouve(s)")
+        
+        # Calcul du Win Rate
+        total_trades = len(closed_trades)
+        winning_trades = len([d for d in closed_trades if (d.get("profit", 0) + d.get("commission", 0) + d.get("swap", 0)) > 0])
+        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        print(f"📊 Win Rate: {win_rate:.1f}% ({winning_trades}/{total_trades})")
         
         return {
             "success": True,
             "account_login": str(account.login),
             "total_deals": len(deals),
+            "total_closed_trades": total_trades,
+            "winning_trades": winning_trades,
+            "win_rate": round(win_rate, 2),
             "deals": [
                 {
                     "id": deal.get("id"),
                     "type": deal.get("type"),
+                    "entryType": deal.get("entryType"),
                     "symbol": deal.get("symbol"),
                     "volume": deal.get("volume"),
                     "price": deal.get("price"),
@@ -172,12 +195,12 @@ async def get_history():
                     "commission": deal.get("commission"),
                     "swap": deal.get("swap"),
                     "time": deal.get("time"),
-                    "entryType": deal.get("entryType")
+                    "comment": deal.get("comment")
                 }
                 for deal in deals
             ]
         }
         
     except Exception as e:
-        print(f"Erreur historique: {str(e)}")
+        print(f"❌ Erreur historique: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur historique: {str(e)}")
